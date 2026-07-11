@@ -1,0 +1,125 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/*
+ * Fase 2.1: paleta trocada por decisão explícita sua (removi o dourado/
+ * verde-floresta da Fase 2). Continua tudo em CSS var — trocar de novo no
+ * futuro (ou adicionar tema claro na Fase de configurações) é editar aqui,
+ * não em cada componente.
+ */
+:root {
+  --color-bg: #07090d;
+  --color-sidebar: #0b0f14;
+  --color-surface: #111827;
+  --color-surface-active: #172033;
+  --color-surface-hover: #1e293b;
+  --color-border: #263244;
+  --color-text: #f8fafc;
+  --color-text-muted: #94a3b8;
+
+  --color-income: #22c55e;
+  --color-expense: #ef4444;
+
+  --color-primary: #3b82f6;
+  --color-primary-hover: #2563eb;
+  --color-primary-soft: rgba(59, 130, 246, 0.14);
+  --color-link: #60a5fa;
+}
+
+body {
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-feature-settings: "tnum" 1;
+}
+
+.tabular-money {
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+}
+
+::selection {
+  background: var(--color-primary-soft);
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-border);
+  border-radius: 999px;
+}
+
+/* Shimmer de skeleton loading */
+@keyframes shimmer {
+  0% {
+    background-position: -200% 0;
+  }
+  100% {
+    background-position: 200% 0;
+  }
+}
+.skeleton {
+  background: linear-gradient(
+    90deg,
+    var(--color-surface) 25%,
+    var(--color-surface-hover) 37%,
+    var(--color-surface) 63%
+  );
+  background-size: 400% 100%;
+  animation: shimmer 1.6s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* Fase 3 — shell premium */
+html {
+  color-scheme: dark;
+}
+
+:root[data-density="compact"] {
+  --row-pad-y: 0.5rem;
+}
+
+:root[data-density="comfortable"] {
+  --row-pad-y: 0.75rem;
+}
+
+.safe-top {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+/* Focus visível consistente (a11y) */
+:focus-visible {
+  outline: 2px solid color-mix(in srgb, var(--color-primary) 60%, transparent);
+  outline-offset: 2px;
+}
+
+/* Utilitário sr-only se Tailwind não expuser em algum contexto */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
