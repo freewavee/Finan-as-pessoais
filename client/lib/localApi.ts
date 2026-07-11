@@ -22,20 +22,18 @@ import type {
   Transaction,
 } from "../types";
 import {
+  createAccount,
   ensurePeriod,
   getSessionUserId,
-  hashPassword,
   listUsers,
   loadUserData,
+  loginAccount,
+  logoutAccount,
   nowIso,
   requireUserId,
   saveUserData,
-  saveUsers,
-  seedDefaults,
-  setSessionUserId,
   uid,
   yearMonthFromIso,
-  emptyUserData,
   type StoredGoal,
   type StoredInvestment,
   type StoredTransaction,
@@ -262,61 +260,46 @@ export async function authSession() {
   if (!userId) return { user: null };
   const user = listUsers().find((u) => u.id === userId);
   if (!user) {
-    setSessionUserId(null);
+    logoutAccount();
     return { user: null };
   }
+  // Garante que o blob de dados existe (contas, categorias…)
+  loadUserData(user.id);
   return {
     user: { id: user.id, email: user.email, name: user.name, image: user.image ?? null },
   };
 }
 
 export async function authRegister(name: string, email: string, password: string) {
-  const users = listUsers();
-  const normalized = email.toLowerCase().trim();
-  if (users.some((u) => u.email === normalized)) {
-    throw new ApiError("Este email já está cadastrado", 409);
+  try {
+    const user = await createAccount(name, email, password);
+    return {
+      ok: true,
+      user: { id: user.id, email: user.email, name: user.name },
+      message: "Conta criada com sucesso",
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Erro ao criar conta";
+    const status = msg.includes("já está cadastrado") ? 409 : 400;
+    throw new ApiError(msg, status);
   }
-  if (password.length < 6) throw new ApiError("Senha deve ter ao menos 6 caracteres", 400);
-
-  const salt = uid();
-  const passwordHash = await hashPassword(password, salt);
-  const user = {
-    id: uid(),
-    email: normalized,
-    name: name.trim(),
-    passwordHash,
-    salt,
-    image: null as string | null,
-    createdAt: nowIso(),
-  };
-  users.push(user);
-  saveUsers(users);
-
-  const data = seedDefaults(emptyUserData(user.name), user.name);
-  saveUserData(user.id, data);
-  setSessionUserId(user.id);
-
-  return {
-    ok: true,
-    user: { id: user.id, email: user.email, name: user.name },
-    message: "Conta criada com sucesso",
-  };
 }
 
 export async function authLogin(email: string, password: string) {
-  const user = listUsers().find((u) => u.email === email.toLowerCase().trim());
-  if (!user) throw new ApiError("Email ou senha incorretos", 401);
-  const hash = await hashPassword(password, user.salt);
-  if (hash !== user.passwordHash) throw new ApiError("Email ou senha incorretos", 401);
-  setSessionUserId(user.id);
-  return {
-    ok: true,
-    user: { id: user.id, email: user.email, name: user.name },
-  };
+  try {
+    const user = await loginAccount(email, password);
+    return {
+      ok: true,
+      user: { id: user.id, email: user.email, name: user.name },
+    };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Email ou senha incorretos";
+    throw new ApiError(msg, 401);
+  }
 }
 
 export async function authLogout() {
-  setSessionUserId(null);
+  logoutAccount();
   return { ok: true };
 }
 

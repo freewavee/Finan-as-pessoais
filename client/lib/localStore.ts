@@ -1,6 +1,6 @@
 /**
- * Persistência 100% no browser (localStorage).
- * Plug-and-play: zero DATABASE_URL, zero Neon, zero backend de banco.
+ * Persistência no navegador (localStorage).
+ * Cada conta tem seus próprios dados; login restaura a sessão.
  */
 
 export type AccountType = "CORRENTE" | "POUPANCA" | "CARTEIRA" | "INVESTIMENTO" | "OUTRO";
@@ -133,19 +133,26 @@ export interface UserData {
   periods: StoredPeriod[];
 }
 
-const USERS_KEY = "financas:users";
-const SESSION_KEY = "financas:session";
-const dataKey = (userId: string) => `financas:data:${userId}`;
+const USERS_KEY = "financas:v4:users";
+const SESSION_KEY = "financas:v4:session";
+const dataKey = (userId: string) => `financas:v4:data:${userId}`;
 
 export function uid(): string {
-  if (typeof crypto !== "undefined" && crypto.randomUUID) {
-    return crypto.randomUUID().replace(/-/g, "").slice(0, 24);
+  try {
+    if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+      return crypto.randomUUID().replace(/-/g, "").slice(0, 24);
+    }
+  } catch {
+    /* ignore */
   }
-  return `id_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
+  return `id_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
 export function yearMonthFromIso(dateIso: string): string {
   const d = new Date(dateIso);
+  if (Number.isNaN(d.getTime())) {
+    return dateIso.slice(0, 7);
+  }
   const y = d.getUTCFullYear();
   const m = String(d.getUTCMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
@@ -155,31 +162,80 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
+function assertStorage(): Storage {
+  if (typeof window === "undefined" || !window.localStorage) {
+    throw new Error("Armazenamento local indisponível neste navegador.");
+  }
+  try {
+    const k = "__financas_probe__";
+    window.localStorage.setItem(k, "1");
+    window.localStorage.removeItem(k);
+  } catch {
+    throw new Error(
+      "Não foi possível salvar dados (localStorage bloqueado ou cheio). Libere espaço ou desative modo privado."
+    );
+  }
+  return window.localStorage;
+}
+
 function readJson<T>(key: string, fallback: T): T {
   try {
-    const raw = localStorage.getItem(key);
-    if (!raw) return fallback;
+    const raw = assertStorage().getItem(key);
+    if (raw == null || raw === "") return fallback;
     return JSON.parse(raw) as T;
-  } catch {
+  } catch (e) {
+    if (e instanceof Error && e.message.includes("Armazenamento")) throw e;
     return fallback;
   }
 }
 
 function writeJson(key: string, value: unknown): void {
-  localStorage.setItem(key, JSON.stringify(value));
+  const storage = assertStorage();
+  const payload = JSON.stringify(value);
+  try {
+    storage.setItem(key, payload);
+  } catch {
+    throw new Error(
+      "Falha ao gravar dados. O armazenamento do navegador pode estar cheio."
+    );
+  }
+  // Confirma leitura (evita “achou que salvou” e perdeu)
+  const check = storage.getItem(key);
+  if (check !== payload) {
+    throw new Error("Falha ao confirmar gravação dos dados.");
+  }
 }
 
 export async function hashPassword(password: string, salt: string): Promise<string> {
-  const enc = new TextEncoder();
-  const data = enc.encode(`${salt}:${password}`);
-  const buf = await crypto.subtle.digest("SHA-256", data);
-  return Array.from(new Uint8Array(buf))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  const material = `${salt}:${password}`;
+  try {
+    if (typeof crypto !== "undefined" && crypto.subtle) {
+      const enc = new TextEncoder();
+      const buf = await crypto.subtle.digest("SHA-256", enc.encode(material));
+      return Array.from(new Uint8Array(buf))
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join("");
+    }
+  } catch {
+    /* fallback abaixo */
+  }
+  // Fallback determinístico (ambientes sem SubtleCrypto)
+  let h = 2166136261;
+  for (let i = 0; i < material.length; i++) {
+    h ^= material.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  let out = (h >>> 0).toString(16).padStart(8, "0");
+  for (let round = 0; round < 7; round++) {
+    h = Math.imul(h ^ material.charCodeAt(round % material.length), 16777619);
+    out += (h >>> 0).toString(16).padStart(8, "0");
+  }
+  return out;
 }
 
 export function listUsers(): StoredUser[] {
-  return readJson<StoredUser[]>(USERS_KEY, []);
+  const users = readJson<StoredUser[]>(USERS_KEY, []);
+  return Array.isArray(users) ? users : [];
 }
 
 export function saveUsers(users: StoredUser[]): void {
@@ -187,12 +243,20 @@ export function saveUsers(users: StoredUser[]): void {
 }
 
 export function getSessionUserId(): string | null {
-  return readJson<string | null>(SESSION_KEY, null);
+  const v = readJson<string | null>(SESSION_KEY, null);
+  return typeof v === "string" && v.length > 0 ? v : null;
 }
 
 export function setSessionUserId(userId: string | null): void {
-  if (!userId) localStorage.removeItem(SESSION_KEY);
-  else writeJson(SESSION_KEY, userId);
+  if (!userId) {
+    try {
+      assertStorage().removeItem(SESSION_KEY);
+    } catch {
+      /* ignore */
+    }
+    return;
+  }
+  writeJson(SESSION_KEY, userId);
 }
 
 export function emptyUserData(profileName = "Usuario"): UserData {
@@ -215,6 +279,26 @@ export function emptyUserData(profileName = "Usuario"): UserData {
       notificationsEnabled: true,
     },
     periods: [],
+  };
+}
+
+function normalizeUserData(raw: Partial<UserData> | null | undefined, profileName?: string): UserData {
+  const base = emptyUserData(profileName);
+  if (!raw || typeof raw !== "object") return base;
+  return {
+    accounts: Array.isArray(raw.accounts) ? raw.accounts : base.accounts,
+    categories: Array.isArray(raw.categories) ? raw.categories : base.categories,
+    paymentMethods: Array.isArray(raw.paymentMethods)
+      ? raw.paymentMethods
+      : base.paymentMethods,
+    transactions: Array.isArray(raw.transactions) ? raw.transactions : base.transactions,
+    goals: Array.isArray(raw.goals) ? raw.goals : base.goals,
+    contributions: Array.isArray(raw.contributions) ? raw.contributions : base.contributions,
+    investments: Array.isArray(raw.investments) ? raw.investments : base.investments,
+    settings: raw.settings && typeof raw.settings === "object"
+      ? { ...base.settings, ...raw.settings }
+      : base.settings,
+    periods: Array.isArray(raw.periods) ? raw.periods : base.periods,
   };
 }
 
@@ -261,13 +345,13 @@ export function seedDefaults(data: UserData, profileName?: string): UserData {
 }
 
 export function loadUserData(userId: string): UserData {
-  const data = readJson<UserData | null>(dataKey(userId), null);
-  if (!data) {
+  const raw = readJson<Partial<UserData> | null>(dataKey(userId), null);
+  if (!raw) {
     const fresh = seedDefaults(emptyUserData());
     saveUserData(userId, fresh);
     return fresh;
   }
-  return data;
+  return normalizeUserData(raw);
 }
 
 export function saveUserData(userId: string, data: UserData): void {
@@ -278,6 +362,15 @@ export function requireUserId(): string {
   const id = getSessionUserId();
   if (!id) {
     const err = new Error("Não autenticado") as Error & { status: number };
+    err.status = 401;
+    throw err;
+  }
+  // Garante que a conta ainda existe
+  if (!listUsers().some((u) => u.id === id)) {
+    setSessionUserId(null);
+    const err = new Error("Sessão inválida. Faça login novamente.") as Error & {
+      status: number;
+    };
     err.status = 401;
     throw err;
   }
@@ -299,4 +392,80 @@ export function ensurePeriod(data: UserData, yearMonth: string): StoredPeriod {
   };
   data.periods.push(p);
   return p;
+}
+
+/** Cria conta + dados iniciais e inicia sessão. */
+export async function createAccount(
+  name: string,
+  email: string,
+  password: string
+): Promise<StoredUser> {
+  assertStorage();
+  const users = listUsers();
+  const normalized = email.toLowerCase().trim();
+  if (!normalized || !normalized.includes("@")) {
+    throw new Error("Informe um email válido");
+  }
+  if (users.some((u) => u.email === normalized)) {
+    throw new Error("Este email já está cadastrado");
+  }
+  if (!name.trim()) throw new Error("Informe seu nome");
+  if (password.length < 6) throw new Error("Senha deve ter ao menos 6 caracteres");
+
+  const salt = uid();
+  const passwordHash = await hashPassword(password, salt);
+  const user: StoredUser = {
+    id: uid(),
+    email: normalized,
+    name: name.trim(),
+    passwordHash,
+    salt,
+    image: null,
+    createdAt: nowIso(),
+  };
+
+  const nextUsers = [...users, user];
+  saveUsers(nextUsers);
+
+  const data = seedDefaults(emptyUserData(user.name), user.name);
+  saveUserData(user.id, data);
+  setSessionUserId(user.id);
+
+  // Verificação ponta a ponta
+  const checkUser = listUsers().find((u) => u.id === user.id);
+  const checkData = loadUserData(user.id);
+  const checkSession = getSessionUserId();
+  if (!checkUser || checkSession !== user.id) {
+    throw new Error("Conta criada, mas a sessão não persistiu. Tente de novo.");
+  }
+  if (checkData.accounts.length === 0 || checkData.categories.length === 0) {
+    throw new Error("Conta criada, mas os dados iniciais falharam. Tente de novo.");
+  }
+
+  return user;
+}
+
+/** Valida senha e inicia sessão. */
+export async function loginAccount(email: string, password: string): Promise<StoredUser> {
+  assertStorage();
+  const user = listUsers().find((u) => u.email === email.toLowerCase().trim());
+  if (!user) throw new Error("Email ou senha incorretos");
+  const hash = await hashPassword(password, user.salt);
+  if (hash !== user.passwordHash) throw new Error("Email ou senha incorretos");
+
+  // Garante dados do usuário (conta antiga / migração)
+  const data = loadUserData(user.id);
+  if (data.accounts.length === 0 || data.categories.length === 0) {
+    saveUserData(user.id, seedDefaults(data, user.name));
+  }
+
+  setSessionUserId(user.id);
+  if (getSessionUserId() !== user.id) {
+    throw new Error("Não foi possível manter a sessão. Verifique o armazenamento do navegador.");
+  }
+  return user;
+}
+
+export function logoutAccount(): void {
+  setSessionUserId(null);
 }

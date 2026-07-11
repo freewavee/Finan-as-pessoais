@@ -54,7 +54,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    refresh();
+    void refresh();
+  }, [refresh]);
+
+  // Reage a logout/login em outra aba
+  useEffect(() => {
+    function onStorage(e: StorageEvent) {
+      if (!e.key || e.key.startsWith("financas:v4:")) {
+        void refresh();
+      }
+    }
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
   }, [refresh]);
 
   const login = useCallback(async (email: string, password: string) => {
@@ -63,7 +74,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setUser(data.user);
       setStatus("authenticated");
     } catch (e) {
-      const msg = e instanceof ApiError ? e.message : "Falha no login";
+      const msg =
+        e instanceof ApiError
+          ? e.message
+          : e instanceof Error
+            ? e.message
+            : "Falha no login";
       throw new Error(msg);
     }
   }, []);
@@ -75,7 +91,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
         setStatus("authenticated");
       } catch (e) {
-        const msg = e instanceof ApiError ? e.message : "Falha no registro";
+        const msg =
+          e instanceof ApiError
+            ? e.message
+            : e instanceof Error
+              ? e.message
+              : "Falha no registro";
         throw new Error(msg);
       }
     },

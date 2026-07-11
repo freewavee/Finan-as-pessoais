@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Landmark } from "lucide-react";
+import { Landmark, ShieldCheck } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
 export function Register() {
@@ -39,8 +39,17 @@ export function Register() {
           </div>
           <div>
             <h1 className="font-display font-bold text-xl text-ink">Criar conta</h1>
-            <p className="text-xs text-ink-muted">Seus dados ficam só com você</p>
+            <p className="text-xs text-ink-muted">Conta + dados salvos neste navegador</p>
           </div>
+        </div>
+
+        <div className="mb-4 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary-soft/40 px-3 py-2 text-xs text-ink-muted">
+          <ShieldCheck size={16} className="text-primary shrink-0 mt-0.5" />
+          <span>
+            Ao criar a conta salvamos email, senha (criptografada) e seus dados financeiros
+            aqui no dispositivo. Você já entra com carteira, categorias e formas de pagamento
+            prontos.
+          </span>
         </div>
 
         <form onSubmit={onSubmit} className="space-y-4">
@@ -88,7 +97,7 @@ export function Register() {
             disabled={loading}
             className="w-full bg-primary hover:bg-primary-hover text-white font-semibold py-2.5 rounded-lg disabled:opacity-50"
           >
-            {loading ? "Criando…" : "Criar conta"}
+            {loading ? "Criando e salvando…" : "Criar conta"}
           </button>
         </form>
 
