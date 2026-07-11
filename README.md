@@ -1,43 +1,56 @@
 # Finanças Pessoais
 
-App de gestão financeira **plug-and-play**.
+App multi-usuário com **login real** e dados na nuvem via **Supabase** (somente ele — sem Neon, sem outro banco).
 
-- ✅ Funciona na **Vercel sem configurar banco**
-- ✅ Sem Neon, sem Postgres, sem variáveis de ambiente
-- ✅ Dados salvos no **localStorage** do navegador
-- ✅ Conta local (email + senha no próprio browser)
+| Peça | Tecnologia |
+|------|------------|
+| Front | React + Vite + Tailwind |
+| Auth | Supabase Auth (email + senha) |
+| Banco | Supabase Postgres + RLS |
+| Deploy | Vercel (site estático) |
 
-## Deploy (Vercel)
+## 1. Criar projeto Supabase (grátis)
 
-1. Importe o repositório no [Vercel](https://vercel.com/new)
-2. Clique em **Deploy**
-3. Pronto — sem Environment Variables
+1. https://supabase.com → **New project**
+2. **SQL Editor** → cole e rode o arquivo [`supabase/schema.sql`](./supabase/schema.sql)
+3. **Authentication → Providers → Email**  
+   - Desative **Confirm email** (para entrar na hora ao criar conta)
+4. **Project Settings → API** → copie:
+   - Project URL  
+   - `anon` `public` key  
 
-Ou via CLI:
+## 2. Rodar local
 
 ```bash
-npx vercel
-```
+cp .env.example .env
+# edite .env com URL e anon key
 
-## Rodar local
-
-```bash
 npm install
 npm run dev
 ```
 
-Abra **http://localhost:3333** → **Criar conta** → usar o app.
+Abra http://localhost:3333 → **Criar conta** → usar o app.
 
-## Como funciona
+## 3. Deploy Vercel
 
-| O quê | Onde |
-|-------|------|
-| Contas, lançamentos, metas… | `localStorage` do navegador |
-| Login / registro | Local (hash SHA-256 no browser) |
-| Deploy Vercel | Site estático (Vite) |
+1. Importe o repo no Vercel  
+2. **Environment Variables** (Production + Preview):
 
-> Os dados ficam **neste navegador/dispositivo**. Limpar o cache do site apaga os dados. Use **Configurações → exportar backup** se quiser copiar o JSON.
+| Key | Value |
+|-----|--------|
+| `VITE_SUPABASE_URL` | `https://xxxx.supabase.co` |
+| `VITE_SUPABASE_ANON_KEY` | `eyJ...` (anon public) |
+
+3. Deploy / Redeploy  
+
+Não precisa de `DATABASE_URL`, Neon nem backend Node.
+
+## O que acontece ao criar conta
+
+1. Supabase Auth cria o usuário  
+2. App grava carteira, categorias e formas de pagamento padrão  
+3. Todos os lançamentos ficam no Postgres do Supabase, isolados por usuário (RLS)
 
 ## Stack
 
-React · Vite · TypeScript · Tailwind · Recharts · Framer Motion
+React · Vite · TypeScript · Tailwind · Recharts · Supabase

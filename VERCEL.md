@@ -1,31 +1,31 @@
-# Deploy na Vercel — zero config
+# Deploy Vercel + Supabase
 
-Este app é uma **SPA estática**. Não precisa de banco (Neon, Postgres, etc.) nem de variáveis de ambiente.
+## Variáveis obrigatórias
 
-## Passos
+| Key | Onde pegar |
+|-----|------------|
+| `VITE_SUPABASE_URL` | Supabase → Project Settings → API → Project URL |
+| `VITE_SUPABASE_ANON_KEY` | Supabase → Project Settings → API → `anon` `public` |
 
-1. https://vercel.com/new → importe `freewavee/Finan-as-pessoais`
-2. Framework: deixe em branco / Other (o `vercel.json` já define build)
-3. **Deploy**
+Marque **Production**, **Preview** e **Development**.
 
-Build automático:
+> Use a chave **anon**, nunca a `service_role` no front.
 
-- Install: `npm install`
-- Build: `npm run build` → `vite build`
-- Output: `dist/client`
+## Checklist Supabase
 
-## Variáveis de ambiente
+1. Rodar `supabase/schema.sql` no SQL Editor  
+2. Desativar **Confirm email** (Auth → Providers → Email) se quiser login imediato  
+3. Site URL (Auth → URL Configuration): `https://seu-app.vercel.app`  
+4. Redirect URLs: `https://seu-app.vercel.app/**`
 
-**Nenhuma.** Pode deixar vazio.
+## Redeploy
 
-## Depois do deploy
+Depois de salvar as envs: Deployments → Redeploy (sem cache se possível).
 
-1. Abra a URL do projeto
-2. Clique em **Criar conta**
-3. Use o app — tudo salva no browser
+## Erros comuns
 
-## Observações
-
-- Dados ficam no `localStorage` de cada visitante
-- Cada dispositivo/navegador tem seus próprios dados
-- Para backup: Configurações → exportar JSON
+| Sintoma | Causa |
+|---------|--------|
+| “Supabase não configurado” | Falta env na Vercel ou build sem as vars |
+| Cria conta mas pede email | Confirm email ainda ativo |
+| 401 / RLS | Schema/SQL não rodado ou políticas faltando |

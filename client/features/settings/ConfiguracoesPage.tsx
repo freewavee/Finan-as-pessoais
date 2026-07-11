@@ -231,12 +231,12 @@ export function Configuracoes() {
           {section === "Sobre" && (
             <div className="text-sm text-ink-muted space-y-2">
               <p>
-                <strong className="text-ink">Finanças Pessoais</strong> — v4.0
+                <strong className="text-ink">Finanças Pessoais</strong> — v5.0
               </p>
-              <p>Stack: React · Vite · localStorage · TypeScript</p>
+              <p>Stack: React · Vite · Supabase · TypeScript</p>
               <p>
-                Plug-and-play: dados no navegador, sem banco externo. Funciona na Vercel sem
-                configuração.
+                Conta e dados na nuvem (Supabase Auth + Postgres). Funciona em qualquer
+                dispositivo.
               </p>
             </div>
           )}

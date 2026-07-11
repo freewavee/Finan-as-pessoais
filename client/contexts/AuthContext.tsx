@@ -13,7 +13,8 @@ import {
   authRegister,
   authSession,
   ApiError,
-} from "../lib/localApi";
+} from "../lib/supabaseApi";
+import { getSupabase, getSupabaseConfigError, isSupabaseConfigured } from "../lib/supabase";
 
 export interface AuthUser {
   id: string;
@@ -25,6 +26,7 @@ export interface AuthUser {
 interface AuthContextValue {
   user: AuthUser | null;
   status: "loading" | "authenticated" | "unauthenticated";
+  configError: string | null;
   refresh: () => Promise<void>;
   login: (email: string, password: string) => Promise<void>;
   register: (name: string, email: string, password: string) => Promise<void>;
@@ -36,8 +38,16 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [status, setStatus] = useState<AuthContextValue["status"]>("loading");
+  const [configError, setConfigError] = useState<string | null>(getSupabaseConfigError());
 
   const refresh = useCallback(async () => {
+    const cfg = getSupabaseConfigError();
+    setConfigError(cfg);
+    if (cfg) {
+      setUser(null);
+      setStatus("unauthenticated");
+      return;
+    }
     try {
       const data = await authSession();
       if (data?.user?.id) {
@@ -57,16 +67,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     void refresh();
   }, [refresh]);
 
-  // Reage a logout/login em outra aba
   useEffect(() => {
-    function onStorage(e: StorageEvent) {
-      if (!e.key || e.key.startsWith("financas:v4:")) {
-        void refresh();
+    if (!isSupabaseConfigured()) return;
+    const client = getSupabase();
+    const { data: sub } = client.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        setUser({
+          id: session.user.id,
+          email: session.user.email ?? "",
+          name: (session.user.user_metadata?.name as string) ?? null,
+          image: (session.user.user_metadata?.avatar_url as string) ?? null,
+        });
+        setStatus("authenticated");
+      } else {
+        setUser(null);
+        setStatus("unauthenticated");
       }
-    }
-    window.addEventListener("storage", onStorage);
-    return () => window.removeEventListener("storage", onStorage);
-  }, [refresh]);
+    });
+    return () => {
+      sub.subscription.unsubscribe();
+    };
+  }, []);
 
   const login = useCallback(async (email: string, password: string) => {
     try {
@@ -110,8 +131,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, status, refresh, login, register, logout }),
-    [user, status, refresh, login, register, logout]
+    () => ({ user, status, configError, refresh, login, register, logout }),
+    [user, status, configError, refresh, login, register, logout]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

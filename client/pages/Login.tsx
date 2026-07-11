@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Landmark, ShieldCheck } from "lucide-react";
+import { Landmark, Cloud } from "lucide-react";
 import { useAuth } from "../contexts/AuthContext";
 
 export function Login() {
   const navigate = useNavigate();
-  const { login, status } = useAuth();
+  const { login, status, configError } = useAuth();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -43,12 +43,18 @@ export function Login() {
         </div>
 
         <div className="mb-4 flex items-start gap-2 rounded-lg border border-primary/20 bg-primary-soft/40 px-3 py-2 text-xs text-ink-muted">
-          <ShieldCheck size={16} className="text-primary shrink-0 mt-0.5" />
+          <Cloud size={16} className="text-primary shrink-0 mt-0.5" />
           <span>
-            Sua conta e lançamentos ficam salvos neste navegador. Ao entrar de novo, tudo
-            continua como você deixou.
+            Conta e dados salvos no <strong className="text-ink">Supabase</strong> — acessíveis em
+            qualquer dispositivo.
           </span>
         </div>
+
+        {configError && (
+          <p className="mb-4 text-sm text-expense bg-expense/10 border border-expense/20 rounded-lg px-3 py-2">
+            {configError}
+          </p>
+        )}
 
         <form onSubmit={onSubmit} className="space-y-4">
           <label className="block text-sm">
@@ -83,7 +89,7 @@ export function Login() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={loading || Boolean(configError)}
             className="w-full bg-primary hover:bg-primary-hover text-white font-semibold py-2.5 rounded-lg disabled:opacity-50"
           >
             {loading ? "Entrando…" : "Entrar"}
